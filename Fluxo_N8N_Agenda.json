@@ -1,0 +1,180 @@
+{
+  "name": "Agenda PRO - N8N + Evolution API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agenda-pro-webhook",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e4b0bc44-8c83-43af-8d26-7bc2a6d70c48",
+      "name": "Webhook (Recebe da Agenda)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [ 250, 300 ],
+      "webhookId": "agenda-pro-mentoria"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "whatsapp_limpo",
+              "value": "={{ $json.body.whatsapp.replace(/[^0-9]/g, '') }}"
+            },
+            {
+              "name": "mensagem_dia_anterior",
+              "value": "=Olá {{ $json.body.nome }}! \nPassando para lembrar que amanhã é o dia da nossa Mentoria 😊. \nO encontro será às {{ $json.body.hora_aula }}h.\n\nAqui está o link exclusivo do seu portal privativo (nossas aulas gravadas serão postadas por lá no futuro):\n{{ $json.body.link_portal_aluno }}"
+            },
+            {
+              "name": "mensagem_hora",
+              "value": "=Oi {{ $json.body.nome }}, nossa mentoria vai começar daqui a pouquinho (em uns 10 minutinhos)!\n\nEntre na sala online oficial por aqui:\n{{ $json.body.link_reuniao }}\n\nEstou te aguardando lá!"
+            }
+          ],
+          "dateTime": [
+             {
+               "name": "data_aula_valida",
+               "value": "={{ $json.body.data_aula }}T{{ $json.body.hora_aula }}:00"
+             }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bfc67055-6b58-450f-a9cb-b20fd45e2da1",
+      "name": "Preparar Dados e Mensagens",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 450, 300 ]
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "id": "e0d04c8f-3d61-4171-89b5-4b47eb2ecad6",
+      "name": "Aguardar (24h Antes)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [ 650, 300 ],
+      "notesInFlow": true,
+      "notes": "Aqui o workflow aguarda o dia anterior para lembrar o aluno."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-sua-evolution.com/message/sendText/NOME_DA_SUA_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SUA_API_KEY_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp_limpo }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $json.mensagem_dia_anterior }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "55c4d0a2-2f3b-dbacc67fdeea",
+      "name": "Evolution: Msg Lembrete (24h)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 850, 300 ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "minutes"
+      },
+      "id": "e0d04c8f-new-delay-2",
+      "name": "Aguardar (10 Min Antes)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [ 1050, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-sua-evolution.com/message/sendText/NOME_DA_SUA_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SUA_API_KEY_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Preparar Dados e Mensagens').item.json.whatsapp_limpo }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $('Preparar Dados e Mensagens').item.json.mensagem_hora }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "55c4d0a2-evolution-hora-da-aula",
+      "name": "Evolution: Msg da Aula",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 1250, 300 ]
+    }
+  ],
+  "connections": {
+    "Webhook (Recebe da Agenda)": {
+      "main": [
+        [
+          {
+            "node": "Preparar Dados e Mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Dados e Mensagens": {
+      "main": [
+        [
+          {
+            "node": "Aguardar (24h Antes)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar (24h Antes)": {
+      "main": [
+        [
+          {
+            "node": "Evolution: Msg Lembrete (24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution: Msg Lembrete (24h)": {
+      "main": [
+        [
+          {
+            "node": "Aguardar (10 Min Antes)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar (10 Min Antes)": {
+      "main": [
+        [
+          {
+            "node": "Evolution: Msg da Aula",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
