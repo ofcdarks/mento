@@ -40,6 +40,9 @@ body {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--glass-shadow);
+    /* Força Aceleração de Placa de Vídeo (Corrige Gaguejo no Browser) */
+    transform: translateZ(0);
+    will-change: backdrop-filter;
 }
 
 .app-container {

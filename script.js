@@ -34,11 +34,13 @@ let searchQuery = '';
 
 // N8N Config elements
 const webhookUrlInput = document.getElementById('webhookUrl');
+const salaMasterUrlInput = document.getElementById('salaMasterUrl');
 const btnSalvarConfig = document.getElementById('btnSalvarConfig');
 
 // Carregamento do DB "Database" 
 let mentoriasData = JSON.parse(localStorage.getItem('mentoriasData')) || [];
 let n8nWebhookConfig = localStorage.getItem('n8nWebhookConfig') || '';
+let salaMasterConfig = localStorage.getItem('salaMasterConfig') || '';
 
 // Alternância de Telas
 function switchView(target) {
@@ -50,6 +52,7 @@ function switchView(target) {
         menuAgendas.classList.remove('active');
         pageTitle.textContent = "Serviços e APIs";
         webhookUrlInput.value = n8nWebhookConfig; // Load da Config
+        if(salaMasterUrlInput) salaMasterUrlInput.value = salaMasterConfig;
     } else {
         viewAgendas.style.display = 'block';
         headerActions.style.display = 'flex';
@@ -65,8 +68,10 @@ menuConfig.addEventListener('click', () => switchView('config'));
 // Salvar Config Webhook N8N
 btnSalvarConfig.addEventListener('click', () => {
     n8nWebhookConfig = webhookUrlInput.value.trim();
+    if(salaMasterUrlInput) salaMasterConfig = salaMasterUrlInput.value.trim();
     localStorage.setItem('n8nWebhookConfig', n8nWebhookConfig);
-    alert('Automação com N8N salva com Sucesso!');
+    localStorage.setItem('salaMasterConfig', salaMasterConfig);
+    alert('Configurações Globais Salvas com Sucesso!');
 });
 
 // Inicia
@@ -74,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDateDisplay();
     renderMentorias();
     webhookUrlInput.value = n8nWebhookConfig;
+    if(salaMasterUrlInput) salaMasterUrlInput.value = salaMasterConfig;
 });
 
 function updateDateDisplay() {
@@ -104,6 +110,15 @@ function getMagicLink(nome) {
     return `${cleanUrl}aluno.html?aluno=${encodeURIComponent(nome)}`;
 }
 
+// Toggle Recorrência Menu
+const cbRecorrente = document.getElementById('recorrente');
+const recorrenteOptions = document.getElementById('recorrenteOptions');
+if(cbRecorrente) {
+    cbRecorrente.addEventListener('change', (e) => {
+        recorrenteOptions.style.display = e.target.checked ? 'block' : 'none';
+    });
+}
+
 // CRIANDO MENTORIA E DESPACHANDO N8N
 agendamentoForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -112,52 +127,88 @@ agendamentoForm.addEventListener('submit', async (e) => {
     const formWhats = document.getElementById('whatsapp').value.trim();
     const formData = document.getElementById('data').value;
     const formHora = document.getElementById('hora').value;
-    const formLink = document.getElementById('link').value;
-
-    const novoAgendamento = {
-        id: Date.now().toString(),
-        nome: formNome,
-        whatsapp: formWhats,
-        data: formData,
-        hora: formHora,
-        link: formLink,
-        anotacoes: document.getElementById('anotacoes').value,
-        pagamento: document.getElementById('statusPagamento').value,
-        status: 'aberta',
-        linkGravacao: ''
-    };
-
-    mentoriasData.push(novoAgendamento);
-    mentoriasData.sort((a,b) => new Date(`${a.data}T${a.hora}`) - new Date(`${b.data}T${b.hora}`));
+    let formLink = document.getElementById('link').value.trim();
     
-    saveAndRender();
-    closeModal();
+    // Fallback: Link Vazio usa a Sala Mestra Automática configurada
+    if(!formLink && salaMasterConfig) {
+        formLink = salaMasterConfig;
+    }
 
-    // Integrafção com N8N Webhook (assíncrona)
-    if(n8nWebhookConfig && n8nWebhookConfig.startsWith('http')) {
-        const magicLnk = getMagicLink(formNome);
-        const requestPayload = {
-            agenda_id: novoAgendamento.id,
-            nome: formNome,
+    const anot = document.getElementById('anotacoes').value;
+    const pgmt = document.getElementById('statusPagamento').value;
+
+    const isRecorrente = cbRecorrente && cbRecorrente.checked;
+    const loopCount = isRecorrente ? parseInt(document.getElementById('qtdSemanas').value) || 1 : 1;
+    
+    let baseDate = new Date(`${formData}T00:00:00`);
+
+    document.querySelector('#agendamentoForm .primary-btn').textContent = "Processando Lote...";
+
+    for(let i = 0; i < loopCount; i++) {
+        let loopDate = new Date(baseDate);
+        if (i > 0) loopDate.setDate(loopDate.getDate() + (i * 7));
+        
+        const dataFormatada = loopDate.toISOString().split("T")[0]; // Mantem ISO String Date
+        const uid = Date.now().toString() + "-" + i;
+        const nomeFinal = isRecorrente ? `${formNome} (Sessão ${i+1}/${loopCount})` : formNome;
+
+        const novoAgendamento = {
+            id: uid,
+            nome: nomeFinal,
             whatsapp: formWhats,
-            data_aula: formData,
-            hora_aula: formHora,
-            link_reuniao: formLink,
-            link_portal_aluno: magicLnk,
-            timestamp_creation: new Date().toISOString()
+            data: dataFormatada,
+            hora: formHora,
+            link: formLink,
+            anotacoes: anot,
+            pagamento: pgmt,
+            status: 'aberta',
+            linkGravacao: ''
         };
 
-        try {
-            // Disparo cego para a automação agir em Background //
-            fetch(n8nWebhookConfig, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(requestPayload)
-            }).then(() => console.log('Ping efetuado ao N8N!')).catch(e => console.warn('Falha no ping webhooks N8N', e));
-        } catch (error) {
-            console.error("Erro interno n8n post", error);
+        mentoriasData.push(novoAgendamento);
+
+        // Envios de Webhook com AWAIT pra não engarrafar picos de Rede
+        if(n8nWebhookConfig && n8nWebhookConfig.startsWith('http')) {
+            const magicLnk = getMagicLink(formNome);
+            const requestPayload = {
+                agenda_id: novoAgendamento.id,
+                nome: novoAgendamento.nome,
+                whatsapp: formWhats,
+                data_aula: dataFormatada,
+                hora_aula: formHora,
+                link_reuniao: formLink,
+                link_portal_aluno: magicLnk,
+                timestamp_creation: new Date().toISOString(),
+                is_recorrente: isRecorrente
+            };
+
+            try {
+                const response = await fetch(n8nWebhookConfig, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestPayload)
+                });
+                
+                // Interceptação Bidirecional: Ouvindo Retorno do N8n (Google Ultra)
+                if(response.ok) {
+                    const dataBack = await response.json();
+                    if(dataBack && dataBack.meet_link) {
+                        novoAgendamento.link = dataBack.meet_link;
+                    }
+                }
+
+            } catch (error) {
+                console.error("Erro interno n8n post agenda em loop: ", error);
+            }
         }
     }
+
+    document.querySelector('#agendamentoForm .primary-btn').textContent = "Agendar e Automatizar";
+
+    // Refresh e Save Main DB
+    mentoriasData.sort((a,b) => new Date(`${a.data}T${a.hora}`) - new Date(`${b.data}T${b.hora}`));
+    saveAndRender();
+    closeModal();
 });
 
 // Finalizando e inserindo URL Gravada

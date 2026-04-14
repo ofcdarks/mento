@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/@phosphor-icons/web/src/regular/style.css" />
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -113,6 +113,12 @@
                     </div>
 
                     <form id="configN8NForm" class="modal-form" style="max-width: 600px;">
+                        <div class="form-group" style="margin-bottom:20px;">
+                            <label for="salaMasterUrl">Seu Link Fixo de Aulas (Google Meet / Zoom)</label>
+                            <input type="url" id="salaMasterUrl" placeholder="Ex: https://meet.google.com/xxx-xxxx-xxx">
+                            <small style="color:var(--text-muted); margin-top:4px;">Se preenchido, você nunca mais precisará colar links na hora de criar a Agenda. O Agente automatizará isso p/ você na tela de agendamentos!</small>
+                        </div>
+
                         <div class="form-group">
                             <label for="webhookUrl">Endereço Webhook do N8n (Webhook-Test ou Production URL)</label>
                             <input type="url" id="webhookUrl" placeholder="Ex: https://seu-n8n.com/webhook/12345-abcde">
@@ -159,8 +165,20 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="link">Link da Sala (Meet / Zoom)</label>
-                    <input type="url" id="link" placeholder="Ex: https://meet.google.com/abc">
+                    <label for="link">Link Específico (Opcional - Deixe vazio para o N8n Gerar uma Sala do Google Meet na Nuvem!)</label>
+                    <input type="url" id="link" placeholder="Mágico: Se vazio, o Sistema G-Workspace gera sua Aula!">
+                </div>
+
+                <div class="form-row" style="margin-top:20px; border-top: 1px dashed var(--glass-border); padding-top:20px; flex-direction:column; gap:15px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="recorrente" style="width:18px; height:18px; cursor:pointer;">
+                        <label for="recorrente" style="margin:0; font-weight:600; color:var(--accent-blue); cursor:pointer;">Marcar como Mentoria Recorrente (Semanal)</label>
+                    </div>
+
+                    <div class="form-group" id="recorrenteOptions" style="display:none; transition:0.3s ease;">
+                        <label for="qtdSemanas">Quantidade de Encontros Totais (Semanas)</label>
+                        <input type="number" id="qtdSemanas" min="2" max="24" value="4">
+                    </div>
                 </div>
                 
                 <div class="form-group">

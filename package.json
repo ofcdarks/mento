@@ -1,0 +1,14 @@
+{
+  "name": "agenda-pro",
+  "version": "1.0.0",
+  "description": "Plataforma de Mentorias com Automação N8n",
+  "scripts": {
+    "dev": "npx live-server ./ --port=8080"
+  },
+  "keywords": [
+    "mentoria",
+    "dashboard"
+  ],
+  "author": "Antigravity",
+  "license": "ISC"
+}
