@@ -12,35 +12,43 @@
       "name": "Webhook (Recebe da Agenda)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [ 0, 300 ]
+      "position": [0, 300]
     },
     {
       "parameters": {
         "operation": "create",
         "calendar": "=primary",
         "start": "={{ $json.body.data_aula }}T{{ $json.body.hora_aula }}:00-03:00",
-        "end": "={{ $json.body.data_aula }}T{{ $json.body.hora_aula.split(':')[0] % 24 + 1 }}:{{ $json.body.hora_aula.split(':')[1] }}:00-03:00",
+        "end": "={{ $json.body.data_aula }}T{{ (parseInt($json.body.hora_aula.split(':')[0]) + 1).toString().padStart(2,'0') }}:{{ $json.body.hora_aula.split(':')[1] }}:00-03:00",
         "summary": "=Mentoria: {{ $json.body.nome }}",
-        "conferencing": "hangoutsMeet",
+        "additionalFields": {
+          "conferenceDataVersion": 1,
+          "conferenceData": {
+            "createRequest": {
+              "requestId": "={{ $json.body.agenda_id }}"
+            }
+          }
+        },
         "options": {}
       },
       "id": "node-google-calendar",
       "name": "Gerar Sala G-Meet",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1,
-      "position": [ 200, 300 ]
+      "position": [250, 300],
+      "notes": "IMPORTANTE: Clique aqui, vá em Credentials e conecte seu Google Workspace com OAuth2."
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"meet_link\": \"{{ $json.hangoutLink }}\",\n  \"status\": \"success\"\n}",
+        "responseBody": "={\n  \"meet_link\": \"{{ $json.hangoutLink || '' }}\",\n  \"calendar_event_id\": \"{{ $json.id || '' }}\",\n  \"status\": \"success\"\n}",
         "options": {}
       },
       "id": "node-respond-webhook",
-      "name": "Responder ao Site da Agenda",
+      "name": "Devolver Link ao Site",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [ 400, 300 ]
+      "position": [500, 200]
     },
     {
       "parameters": {
@@ -51,94 +59,104 @@
               "value": "={{ $('Webhook (Recebe da Agenda)').item.json.body.whatsapp.replace(/[^0-9]/g, '') }}"
             },
             {
-              "name": "mensagem_dia_anterior",
-              "value": "=Olá {{ $('Webhook (Recebe da Agenda)').item.json.body.nome }}! \nPassando para lembrar que amanhã é o dia da nossa Mentoria 😊. \nO encontro será às {{ $('Webhook (Recebe da Agenda)').item.json.body.hora_aula }}h.\n\nAqui está o link exclusivo do seu portal privativo:\n{{ $('Webhook (Recebe da Agenda)').item.json.body.link_portal_aluno }}\n(Você acessará a sala gravada lá no futuro)"
+              "name": "nome_aluno",
+              "value": "={{ $('Webhook (Recebe da Agenda)').item.json.body.nome }}"
             },
             {
-              "name": "mensagem_hora",
-              "value": "=Oi {{ $('Webhook (Recebe da Agenda)').item.json.body.nome }}, nossa mentoria vai começar daqui a pouquinho (em uns 10 minutinhos)!\n\nAcabei de gerar nossa sala oficial do Google Meet, acesse por aqui:\n{{ $('Gerar Sala G-Meet').item.json.hangoutLink }}\n\nEstou te aguardando lá!"
+              "name": "data_aula",
+              "value": "={{ $('Webhook (Recebe da Agenda)').item.json.body.data_aula }}"
+            },
+            {
+              "name": "hora_aula",
+              "value": "={{ $('Webhook (Recebe da Agenda)').item.json.body.hora_aula }}"
+            },
+            {
+              "name": "link_portal",
+              "value": "={{ $('Webhook (Recebe da Agenda)').item.json.body.link_portal_aluno }}"
+            },
+            {
+              "name": "link_meet",
+              "value": "={{ $('Gerar Sala G-Meet').item.json.hangoutLink || $('Webhook (Recebe da Agenda)').item.json.body.link_reuniao || 'Link será enviado em breve' }}"
             }
           ]
         },
         "options": {}
       },
       "id": "node-preparar-dados",
-      "name": "Preparar Mensagens EVOLUTION",
+      "name": "Preparar Dados",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
-      "position": [ 600, 300 ]
+      "position": [500, 400]
     },
     {
       "parameters": {
-        "amount": 24,
-        "unit": "hours"
+        "unit": "hours",
+        "amount": "={{ (() => { const agora = new Date(); const [ano, mes, dia] = $json.data_aula.split('-'); const [h, m] = $json.hora_aula.split(':'); const aula = new Date(ano, mes-1, dia, h, m); const diffMs = aula - agora - (24*60*60*1000); return Math.max(0, Math.floor(diffMs / 3600000)); })() }}"
       },
       "id": "node-wait-24h",
-      "name": "Aguardar (24h Antes)",
+      "name": "Esperar ate 24h Antes",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [ 800, 300 ],
-      "notesInFlow": true,
-      "notes": "Aqui o workflow aguarda o dia anterior para lembrar o aluno."
+      "position": [750, 400]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api-sua-evolution.com/message/sendText/NOME_DA_SUA_INSTANCIA",
+        "url": "https://api.canaisdarks.com.br/message/sendText/LA CASA DARK",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "SUA_API_KEY_AQUI"
+              "value": "9CE479CBC886-42E7-A1A6-85D06B9DC78D"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp_limpo }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $json.mensagem_dia_anterior }}\"\n  }\n}",
+        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp_limpo }}@s.whatsapp.net\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"Oi {{ $json.nome_aluno }}! 😊\\n\\nPassando pra lembrar que amanhã temos nossa Mentoria marcada às *{{ $json.hora_aula }}h*.\\n\\n📚 Acesse seu portal de aulas aqui:\\n{{ $json.link_portal }}\\n\\nNos vemos amanhã! 🚀\"\n  }\n}",
         "options": {}
       },
       "id": "node-evolution-24h",
-      "name": "Evolution: Msg Lembrete (24h)",
+      "name": "WhatsApp: Lembrete 24h",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [ 1000, 300 ]
+      "position": [1000, 400]
     },
     {
       "parameters": {
-        "amount": 10,
-        "unit": "minutes"
+        "amount": 23,
+        "unit": "hours"
       },
       "id": "node-wait-10m",
-      "name": "Aguardar (10 Min Antes)",
+      "name": "Esperar ate 10min Antes",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [ 1200, 300 ]
+      "position": [1250, 400]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api-sua-evolution.com/message/sendText/NOME_DA_SUA_INSTANCIA",
+        "url": "https://api.canaisdarks.com.br/message/sendText/LA CASA DARK",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "SUA_API_KEY_AQUI"
+              "value": "9CE479CBC886-42E7-A1A6-85D06B9DC78D"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"number\": \"{{ $('Preparar Mensagens EVOLUTION').item.json.whatsapp_limpo }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $('Preparar Mensagens EVOLUTION').item.json.mensagem_hora }}\"\n  }\n}",
+        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp_limpo }}@s.whatsapp.net\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"Fala {{ $json.nome_aluno }}! ⏰\\n\\nNossa mentoria começa em *10 minutinhos*!\\n\\n🎥 Entra na sala por aqui:\\n{{ $json.link_meet }}\\n\\nTe espero lá! 💪\"\n  }\n}",
         "options": {}
       },
       "id": "node-evolution-hora",
-      "name": "Evolution: Msg da Aula c/ Link",
+      "name": "WhatsApp: Link da Aula 10min",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [ 1400, 300 ]
+      "position": [1500, 400]
     }
   ],
   "connections": {
@@ -157,56 +175,56 @@
       "main": [
         [
           {
-            "node": "Responder ao Site da Agenda",
+            "node": "Devolver Link ao Site",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Preparar Mensagens EVOLUTION",
+            "node": "Preparar Dados",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar Mensagens EVOLUTION": {
+    "Preparar Dados": {
       "main": [
         [
           {
-            "node": "Aguardar (24h Antes)",
+            "node": "Esperar ate 24h Antes",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aguardar (24h Antes)": {
+    "Esperar ate 24h Antes": {
       "main": [
         [
           {
-            "node": "Evolution: Msg Lembrete (24h)",
+            "node": "WhatsApp: Lembrete 24h",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Evolution: Msg Lembrete (24h)": {
+    "WhatsApp: Lembrete 24h": {
       "main": [
         [
           {
-            "node": "Aguardar (10 Min Antes)",
+            "node": "Esperar ate 10min Antes",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aguardar (10 Min Antes)": {
+    "Esperar ate 10min Antes": {
       "main": [
         [
           {
-            "node": "Evolution: Msg da Aula c/ Link",
+            "node": "WhatsApp: Link da Aula 10min",
             "type": "main",
             "index": 0
           }
